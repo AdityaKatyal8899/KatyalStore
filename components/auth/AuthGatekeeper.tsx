@@ -10,6 +10,8 @@ interface AuthGatekeeperProps {
 export function AuthGatekeeper({ onAuthenticated }: AuthGatekeeperProps) {
   const [isVisible, setIsVisible] = useState(true);
   const [formData, setFormData] = useState({ name: '', email: '' });
+  const [code, setCode] = useState('');
+  const [codeSent, setCodeSent] = useState(false);
   const [error, setError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -26,20 +28,33 @@ export function AuthGatekeeper({ onAuthenticated }: AuthGatekeeperProps) {
       return;
     }
 
+    if (codeSent && !code.trim()) {
+      setError('Please enter the verification code');
+      return;
+    }
+
     setIsSubmitting(true);
     setError('');
 
     try {
+      const payload = codeSent
+        ? { name: formData.name, email: formData.email, code }
+        : { name: formData.name, email: formData.email };
+
       const response = await fetch('/api/auth', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formData),
+        body: JSON.stringify(payload),
       });
 
       const data = await response.json();
       if (response.ok && data.success) {
-        onAuthenticated(data.user);
-        setIsVisible(false);
+        if (data.codeSent) {
+          setCodeSent(true);
+        } else {
+          onAuthenticated(data.user);
+          setIsVisible(false);
+        }
       } else {
         setError(data.error || 'Failed to authenticate');
       }
@@ -78,10 +93,11 @@ export function AuthGatekeeper({ onAuthenticated }: AuthGatekeeperProps) {
                 </label>
                 <input
                   type="text"
+                  disabled={codeSent}
                   value={formData.name}
                   onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                   placeholder="Your name"
-                  className="w-full bg-white border-2 border-black px-4 py-3 text-black placeholder-gray-400 focus:outline-none focus:bg-yellow-100 font-medium transition"
+                  className="w-full bg-white border-2 border-black px-4 py-3 text-black placeholder-gray-400 focus:outline-none focus:bg-yellow-100 font-medium transition disabled:opacity-60 disabled:bg-gray-100"
                 />
               </div>
 
@@ -91,12 +107,34 @@ export function AuthGatekeeper({ onAuthenticated }: AuthGatekeeperProps) {
                 </label>
                 <input
                   type="email"
+                  disabled={codeSent}
                   value={formData.email}
                   onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                   placeholder="your@email.com"
-                  className="w-full bg-white border-2 border-black px-4 py-3 text-black placeholder-gray-400 focus:outline-none focus:bg-yellow-100 font-medium transition"
+                  className="w-full bg-white border-2 border-black px-4 py-3 text-black placeholder-gray-400 focus:outline-none focus:bg-yellow-100 font-medium transition disabled:opacity-60 disabled:bg-gray-100"
                 />
               </div>
+
+              {codeSent && (
+                <motion.div
+                  initial={{ opacity: 0, y: -10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="space-y-2"
+                >
+                  <label className="block text-black text-sm font-black mb-2 uppercase">
+                    Verification Code
+                  </label>
+                  <input
+                    type="text"
+                    maxLength={6}
+                    value={code}
+                    onChange={(e) => setCode(e.target.value.replace(/\D/g, ''))}
+                    placeholder="Enter 6-Digit OTP"
+                    className="w-full bg-white border-2 border-black px-4 py-3 text-black placeholder-gray-400 focus:outline-none focus:bg-yellow-100 font-black text-center tracking-[6px] text-lg transition animate-none"
+                    autoFocus
+                  />
+                </motion.div>
+              )}
 
               {error && (
                 <motion.p
@@ -108,13 +146,31 @@ export function AuthGatekeeper({ onAuthenticated }: AuthGatekeeperProps) {
                 </motion.p>
               )}
 
-              <button
-                type="submit"
-                disabled={isSubmitting}
-                className="w-full bg-black text-white font-black py-3 uppercase tracking-tight text-sm border-4 border-black hover:shadow-[6px_6px_0px_0px_#000000] active:shadow-[2px_2px_0px_0px_#000000] transition-shadow disabled:opacity-55"
-              >
-                {isSubmitting ? 'Entering Store...' : 'Enter Store'}
-              </button>
+              <div className="space-y-2">
+                <button
+                  type="submit"
+                  disabled={isSubmitting}
+                  className="w-full bg-black text-white font-black py-3 uppercase tracking-tight text-sm border-4 border-black hover:shadow-[6px_6px_0px_0px_#000000] active:shadow-[2px_2px_0px_0px_#000000] transition-shadow disabled:opacity-55 cursor-pointer"
+                >
+                  {codeSent 
+                    ? (isSubmitting ? 'Verifying Code...' : 'Verify & Enter Store') 
+                    : (isSubmitting ? 'Sending Verification Code...' : 'Send Verification Code')}
+                </button>
+
+                {codeSent && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setCodeSent(false);
+                      setCode('');
+                      setError('');
+                    }}
+                    className="w-full text-center text-xs font-black uppercase text-black hover:underline py-1 cursor-pointer"
+                  >
+                    ← Change Email or Restart
+                  </button>
+                )}
+              </div>
             </form>
 
             <p className="text-black text-xs text-center mt-6 font-bold">
