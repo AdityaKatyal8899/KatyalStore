@@ -24,8 +24,8 @@ export const APPS: App[] = [
     name: 'FetchFlow',
     category: 'Developer Tools',
     size: '3.8 MB',
-    teaser: 'The ultimate asset pipeline router.',
-    fullDescription: 'The ultimate asset pipeline router. Stop wrestling with chaotic networking threads—let your streams flow smoothly where they belong, completely automated.',
+    teaser: 'Looking for a place for downloading media without ads? FetchFlow is the one to get this done.',
+    fullDescription: 'Frustrated with the ads during downloading your contnet? FetchFlow solves this problem. You can download the reels/YouTube Videos/Audios without watching any ad.',
     icon: '/icons/fetchflow.jpg',
   },
 ];
