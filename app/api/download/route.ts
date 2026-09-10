@@ -79,7 +79,7 @@ export async function GET(request: NextRequest) {
 
     const apksMap: Record<string, { fileName: string; appName: string }> = {
       'cowatch': {
-        fileName: 'CoWatch-Latest-release.apk',
+        fileName: 'CoWatch-Latest-release-v1.0.1.apk',
         appName: 'CoWatch',
       },
       'fetchflow': {
