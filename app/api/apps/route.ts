@@ -17,7 +17,7 @@ export async function GET(request: NextRequest) {
     
     // Build paths to actual files in S3 or local apks folder
     const apkFilenames: Record<string, string> = {
-      'cowatch': 'CoWatch-Latest-release.apk',
+      'cowatch': 'CoWatch-Latest-release-v1.0.1',
       'fetchflow': 'FetchFlow-android-v.1.0.1.apk',
     };
 
