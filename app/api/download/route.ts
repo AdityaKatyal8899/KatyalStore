@@ -1,19 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getDb } from '@/lib/db';
-import { s3Client } from '@/lib/s3';
+import { s3Client, BUCKET_NAME } from '@/lib/s3';
 import { GetObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import fs from 'fs';
 import path from 'path';
 
-// POST: Logs downloads (remains for compatibility/simulations)
+// POST: Logs downloads (for telemetry/simulations)
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { name, email, appName, timestamp } = body;
+    const { name, email, appName, appId, timestamp } = body;
 
     // Validate request body
-    if (!name || !email || !appName || !timestamp) {
+    if (!name || !email || (!appName && !appId)) {
       return NextResponse.json(
         { success: false, message: 'Missing required fields' },
         { status: 400 }
@@ -28,26 +28,40 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Log to MongoDB downloads collection
     const db = await getDb();
+    const targetAppId = (appId || appName).toLowerCase().replace(/[^a-z0-9]/g, '-');
+
+    // Find app record to get official name
+    const appDoc = await db.collection('application').findOne({
+      $or: [
+        { appId: targetAppId },
+        { name: { $regex: new RegExp(`^${appName}$`, 'i') } }
+      ]
+    });
+
+    const resolvedName = appDoc?.name || appName || targetAppId;
+
+    // Log to MongoDB downloads collection
     await db.collection('downloads').insertOne({
       name,
-      email,
-      appName,
+      email: email.trim().toLowerCase(),
+      appName: resolvedName,
+      appId: appDoc?.appId || targetAppId,
       timestamp: timestamp || new Date().toISOString(),
       userAgent: request.headers.get('user-agent'),
       ipAddress: request.headers.get('x-forwarded-for') || request.ip || '127.0.0.1',
     });
 
     // Increment downloadsCount in application collection
-    const appId = appName.toLowerCase() === 'cowatch' ? 'cowatch' : 'fetchflow';
-    await db.collection('application').updateOne(
-      { appId },
-      { $inc: { downloadsCount: 1 } },
-      { upsert: true }
-    );
+    if (appDoc?.appId) {
+      await db.collection('application').updateOne(
+        { appId: appDoc.appId },
+        { $inc: { downloadsCount: 1 } },
+        { upsert: true }
+      );
+    }
 
-    console.log(`[KatyalStore] MongoDB POST Download logged: ${name} (${email}) - ${appName}`);
+    console.log(`[KatyalStore] MongoDB POST Download logged: ${name} (${email}) - ${resolvedName}`);
 
     return NextResponse.json(
       { success: true, message: 'Download logged successfully' },
@@ -77,33 +91,35 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const apksMap: Record<string, { fileName: string; appName: string }> = {
-      'cowatch': {
-        fileName: 'CoWatch-Latest-release-v1.0.1.apk',
-        appName: 'CoWatch',
-      },
-      'fetchflow': {
-        fileName: 'FetchFlow-android-v.1.0.1.apk',
-        appName: 'FetchFlow',
-      },
-    };
+    // Connect to database
+    const db = await getDb();
 
-    const targetApp = apksMap[appId.toLowerCase()];
-    if (!targetApp) {
+    // Query application dynamically from MongoDB
+    const appDoc = await db.collection('application').findOne({
+      $or: [
+        { appId: appId.toLowerCase() },
+        { name: { $regex: new RegExp(`^${appId}$`, 'i') } }
+      ]
+    });
+
+    if (!appDoc) {
       return NextResponse.json(
-        { error: 'Invalid appId or APK not found in inventory' },
+        { error: `Application '${appId}' not found in inventory` },
         { status: 404 }
       );
     }
 
-    // Connect to database
-    const db = await getDb();
+    const appName = appDoc.name || appId;
+    const fileName = appDoc.fileName || appDoc.s3Key || `${appName}-release.apk`;
+    const s3Key = appDoc.s3Key || appDoc.fileName || fileName;
 
     // Log the download event in downloads collection
     await db.collection('downloads').insertOne({
       name,
       email: email.trim().toLowerCase(),
-      appName: targetApp.appName,
+      appName: appName,
+      appId: appDoc.appId || appId.toLowerCase(),
+      fileName: fileName,
       timestamp: new Date().toISOString(),
       userAgent: request.headers.get('user-agent'),
       ipAddress: request.headers.get('x-forwarded-for') || request.ip || '127.0.0.1',
@@ -111,45 +127,52 @@ export async function GET(request: NextRequest) {
 
     // Increment downloadsCount in application collection
     await db.collection('application').updateOne(
-      { appId: appId.toLowerCase() },
+      { appId: appDoc.appId },
       { $inc: { downloadsCount: 1 } },
       { upsert: true }
     );
 
-    console.log(`[KatyalStore] MongoDB GET Download logged: ${name} (${email}) - ${targetApp.appName}`);
+    console.log(`[KatyalStore] MongoDB GET Download logged: ${name} (${email}) - ${appName} [${fileName}]`);
 
     // 1. Try to generate presigned S3 URL and redirect if credentials exist
     if (process.env.AWS_ACCESS_KEY_ID && process.env.AWS_SECRET_ACCESS_KEY) {
       try {
         const getCommand = new GetObjectCommand({
-          Bucket: process.env.AWS_S3_BUCKET_NAME || 'katyalstore',
-          Key: targetApp.fileName,
-          ResponseContentDisposition: `attachment; filename="${targetApp.fileName}"`,
+          Bucket: BUCKET_NAME,
+          Key: s3Key,
+          ResponseContentDisposition: `attachment; filename="${fileName.endsWith('.apk') ? fileName : `${fileName}.apk`}"`,
         });
         const presignedUrl = await getSignedUrl(s3Client, getCommand, { expiresIn: 900 });
         console.log(`[KatyalStore] Generated S3 presigned URL for download: ${presignedUrl}`);
         return NextResponse.redirect(presignedUrl);
       } catch (s3Error) {
-        console.error('[KatyalStore] S3 presigned URL generation failed, checking local fallback:', s3Error);
+        console.error(`[KatyalStore] S3 presigned URL generation failed for ${s3Key}, checking local fallback:`, s3Error);
       }
     }
 
-    // 2. Local fallback streaming
-    const filePath = path.join(process.cwd(), 'apks', targetApp.fileName);
-    if (fs.existsSync(filePath)) {
-      const stat = fs.statSync(filePath);
-      const fileStream = fs.createReadStream(filePath);
-      return new Response(fileStream as any, {
-        headers: {
-          'Content-Type': 'application/vnd.android.package-archive',
-          'Content-Disposition': `attachment; filename="${targetApp.fileName}"`,
-          'Content-Length': stat.size.toString(),
-        },
-      });
+    // 2. Local fallback streaming if file exists locally
+    const possiblePaths = [
+      path.join(process.cwd(), 'apks', fileName),
+      path.join(process.cwd(), 'apks', `${fileName}.apk`),
+      path.join(process.cwd(), 'apks', s3Key),
+    ];
+
+    for (const filePath of possiblePaths) {
+      if (fs.existsSync(filePath)) {
+        const stat = fs.statSync(filePath);
+        const fileStream = fs.createReadStream(filePath);
+        return new Response(fileStream as any, {
+          headers: {
+            'Content-Type': 'application/vnd.android.package-archive',
+            'Content-Disposition': `attachment; filename="${fileName}"`,
+            'Content-Length': stat.size.toString(),
+          },
+        });
+      }
     }
 
     return NextResponse.json(
-      { error: `Installer file ${targetApp.fileName} is missing from both S3 and local storage` },
+      { error: `Installer file '${fileName}' is missing from both S3 and local storage` },
       { status: 404 }
     );
   } catch (error) {
@@ -160,3 +183,4 @@ export async function GET(request: NextRequest) {
     );
   }
 }
+

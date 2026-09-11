@@ -34,12 +34,13 @@ export function AppCard({ app, onClick }: AppCardProps) {
         {/* Icon block with white background */}
         <div className="bg-white border-2 border-black p-2 flex items-center justify-center flex-shrink-0 w-16 h-16 relative shadow-[2px_2px_0px_0px_#000000]">
           <Image 
-            src={app.icon} 
-            alt={app.name}
+            src={app.icon || '/placeholder-logo.png'} 
+            alt={app.name || 'App icon'}
             fill
             className="object-contain p-1"
           />
         </div>
+
 
         {/* Content section */}
         <div className="flex-1 min-w-0">
@@ -76,12 +77,41 @@ export function AppCard({ app, onClick }: AppCardProps) {
             <p className="text-sm text-black mb-2 border-t-2 border-black pt-2 mt-2">
               {app.fullDescription}
             </p>
+
+            {/* Screenshots Preview Strip when expanded */}
+            {app.screenshots && app.screenshots.length > 0 && (
+              <div className="mt-3 pt-2 border-t-2 border-black">
+                <p className="text-[10px] font-black uppercase text-gray-700 mb-1.5 flex items-center gap-1">
+                  <span>🖼️ In-App Screenshots ({app.screenshots.length})</span>
+                </p>
+                <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-thin scrollbar-thumb-black">
+                  {app.screenshots.map((sUrl, sIdx) => (
+                    <div
+                      key={`${sUrl}-${sIdx}`}
+                      className="relative w-14 aspect-[9/16] bg-black border-2 border-black flex-shrink-0 shadow-[1px_1px_0px_0px_#000000]"
+                    >
+                      <Image
+                        src={sUrl}
+                        alt={`${app.name} preview ${sIdx + 1}`}
+                        fill
+                        className="object-cover"
+                      />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </motion.div>
 
           {/* Meta info */}
           <div className="flex flex-wrap gap-2 text-[10px] sm:text-xs font-black text-black uppercase tracking-tight mt-2">
             <span className="bg-black text-white px-2 py-1">{app.category}</span>
             <span className="bg-yellow-300 text-black px-2 py-1">{app.size}</span>
+            {app.screenshots && app.screenshots.length > 0 && (
+              <span className="bg-purple-200 text-black px-2 py-1 border border-black shadow-[1px_1px_0px_0px_#000000]">
+                🖼️ {app.screenshots.length} Screens
+              </span>
+            )}
             {(app as any).downloadsCount !== undefined && (
               <span className="bg-green-300 text-black px-2 py-1 border border-black shadow-[1px_1px_0px_0px_#000000]">
                 {(app as any).downloadsCount} Downloads

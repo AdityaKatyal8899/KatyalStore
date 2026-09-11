@@ -6,12 +6,13 @@ import { useState } from 'react';
 
 interface DownloadButtonProps {
   appName: string;
+  appId?: string;
   onDownloadComplete?: () => void;
 }
 
 type DownloadStage = 'idle' | 'connecting' | 'downloading' | 'complete';
 
-export function DownloadButton({ appName, onDownloadComplete }: DownloadButtonProps) {
+export function DownloadButton({ appName, appId, onDownloadComplete }: DownloadButtonProps) {
   const [stage, setStage] = useState<DownloadStage>('idle');
   const [progress, setProgress] = useState(0);
 
@@ -42,14 +43,15 @@ export function DownloadButton({ appName, onDownloadComplete }: DownloadButtonPr
     const parsedUser = user ? JSON.parse(user) : null;
     const emailParam = parsedUser ? encodeURIComponent(parsedUser.email) : 'guest@example.com';
     const nameParam = parsedUser ? encodeURIComponent(parsedUser.name) : 'Guest';
-    const appId = appName.toLowerCase() === 'cowatch' ? 'cowatch' : 'fetchflow';
+    const targetId = (appId || appName).toLowerCase().replace(/[^a-z0-9]/g, '-');
 
-    window.location.href = `/api/download?appId=${appId}&email=${emailParam}&name=${nameParam}`;
+    window.location.href = `/api/download?appId=${encodeURIComponent(targetId)}&email=${emailParam}&name=${nameParam}`;
 
     if (onDownloadComplete) {
       setTimeout(onDownloadComplete, 1000);
     }
   };
+
 
   const getButtonText = () => {
     switch (stage) {

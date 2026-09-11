@@ -75,12 +75,13 @@ export function DetailModal({ app, onClose }: DetailModalProps) {
             {/* App icon */}
             <div className="bg-black p-4 flex items-center justify-center mb-6 w-20 h-20 relative">
               <Image 
-                src={app.icon} 
-                alt={app.name}
+                src={app.icon || '/placeholder-logo.png'} 
+                alt={app.name || 'App icon'}
                 fill
                 className="object-contain p-2"
               />
             </div>
+
 
             {/* App name */}
             <h2 className="text-3xl font-black text-black mb-2 uppercase tracking-tight">{app.name}</h2>

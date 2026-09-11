@@ -9,6 +9,7 @@ import { APPS } from '@/lib/appData';
 import { AuthGatekeeper } from '@/components/auth/AuthGatekeeper';
 import { DownloadButton } from '@/components/shared/DownloadButton';
 import { StarRating } from '@/components/store/StarRating';
+import { ScreenshotGallery } from '@/components/store/ScreenshotGallery';
 import Image from 'next/image';
 
 interface PageProps {
@@ -65,9 +66,13 @@ export default function AppDetailPage({ params }: PageProps) {
       const res = await fetch('/api/apps');
       if (res.ok) {
         const data = await res.json();
-        const matchedApp = data.find((a: any) => a.id === id);
+        const matchedApp = data.find((a: any) => 
+          (a.id && a.id.toLowerCase() === id.toLowerCase()) || 
+          (a.appId && a.appId.toLowerCase() === id.toLowerCase())
+        );
         if (matchedApp) {
           setApp(matchedApp);
+          fetchReviews(matchedApp.name);
         }
       }
     } catch (e) {
@@ -108,11 +113,12 @@ export default function AppDetailPage({ params }: PageProps) {
   };
 
   // Fetch reviews from API
-  const fetchReviews = async () => {
-    if (!staticApp) return;
+  const fetchReviews = async (targetAppName?: string) => {
+    const queryName = targetAppName || app?.name || staticApp?.name;
+    if (!queryName) return;
     setIsLoadingReviews(true);
     try {
-      const res = await fetch(`/api/reviews?appName=${encodeURIComponent(staticApp.name)}`);
+      const res = await fetch(`/api/reviews?appName=${encodeURIComponent(queryName)}`);
       if (res.ok) {
         const data = await res.json();
         setReviews(data);
@@ -125,10 +131,10 @@ export default function AppDetailPage({ params }: PageProps) {
   };
 
   useEffect(() => {
-    if (staticApp) {
-      fetchReviews();
+    if (app?.name) {
+      fetchReviews(app.name);
     }
-  }, [id]);
+  }, [app?.name]);
 
   if (!app) {
     return (
@@ -141,6 +147,7 @@ export default function AppDetailPage({ params }: PageProps) {
       </div>
     );
   }
+
 
   // Only use dynamic reviews (removed pre-seeded hardcoded data)
   const allReviews = reviews;
@@ -326,8 +333,8 @@ export default function AppDetailPage({ params }: PageProps) {
                     {/* App icon surrounded in white background rectangle */}
                     <div className="bg-white w-24 h-24 p-4 flex items-center justify-center flex-shrink-0 relative border-4 border-black shadow-[4px_4px_0px_0px_#000000]">
                       <Image
-                        src={app.icon}
-                        alt={app.name}
+                        src={app.icon || '/placeholder-logo.png'}
+                        alt={app.name || 'App icon'}
                         fill
                         className="object-contain p-2"
                       />
@@ -339,7 +346,7 @@ export default function AppDetailPage({ params }: PageProps) {
                       </h1>
                       <div className="flex flex-wrap gap-3 text-xs font-black uppercase tracking-tight">
                         <span className="bg-orange-200 border border-black px-2 py-0.5">{app.size}</span>
-                        <span className="bg-yellow-200 border border-black px-2 py-0.5">v1.0.0</span>
+                        <span className="bg-yellow-200 border border-black px-2 py-0.5">{app.version || 'v1.0.0'}</span>
                         {app.downloadsCount !== undefined && (
                           <span className="bg-green-300 border border-black px-2 py-0.5 shadow-[1px_1px_0px_0px_#000000]">
                             📥 {app.downloadsCount} Downloads
@@ -378,11 +385,15 @@ export default function AppDetailPage({ params }: PageProps) {
                   <div className="bg-orange-50 border-2 border-black p-4 md:p-6 shadow-[4px_4px_0px_0px_#000000]">
                     <h4 className="text-sm font-black uppercase tracking-wider mb-2">Ready to vibe?</h4>
                     <p className="text-xs text-gray-600 mb-4">Click below to start simulating the immediate APK download for your device.</p>
-                    <DownloadButton appName={app.name} onDownloadComplete={fetchDynamicApp} />
+                    <DownloadButton appName={app.name} appId={app.id || (app as any).appId} onDownloadComplete={fetchDynamicApp} />
                   </div>
+
                 </div>
 
-
+                {/* Screenshots Gallery Showcase */}
+                {app.screenshots && app.screenshots.length > 0 && (
+                  <ScreenshotGallery screenshots={app.screenshots} appName={app.name} />
+                )}
               </div>
 
               {/* Right Column: Reviews and Ratings */}

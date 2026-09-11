@@ -1,84 +1,142 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getDb } from '@/lib/db';
-import { APPS } from '@/lib/appData';
-import { s3Client } from '@/lib/s3';
+import { APPS, formatExactSize } from '@/lib/appData';
+import { s3Client, BUCKET_NAME } from '@/lib/s3';
 import { HeadObjectCommand } from '@aws-sdk/client-s3';
 import fs from 'fs';
 import path from 'path';
-
-// Helper to format bytes to MB
-function formatBytes(bytes: number): string {
-  return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
-}
 
 export async function GET(request: NextRequest) {
   try {
     const db = await getDb();
     
-    // Build paths to actual files in S3 or local apks folder
-    const apkFilenames: Record<string, string> = {
-      'cowatch': 'CoWatch-Latest-release-v1.0.1',
-      'fetchflow': 'FetchFlow-android-v.1.0.1.apk',
-    };
+    // Fetch apps from MongoDB application collection
+    let dbApps = await db.collection('application').find({}).toArray();
+
+    // Auto-seed initial catalog from APPS if MongoDB collection is empty
+    if (dbApps.length === 0) {
+      for (const app of APPS) {
+        await db.collection('application').updateOne(
+          { appId: app.id },
+          {
+            $setOnInsert: {
+              appId: app.id,
+              name: app.name,
+              category: app.category,
+              size: app.size,
+              teaser: app.teaser,
+              fullDescription: app.fullDescription,
+              icon: app.icon,
+              version: app.version || 'v1.0.1',
+              fileName: app.fileName || `${app.name}-release.apk`,
+              s3Key: app.s3Key || app.fileName || `${app.name}-release.apk`,
+              screenshots: app.screenshots || [],
+              downloadsCount: 0,
+              reviewsCount: 0,
+              averageRating: 5.0,
+              createdAt: new Date().toISOString(),
+              updatedAt: new Date().toISOString(),
+            },
+          },
+          { upsert: true }
+        );
+      }
+      dbApps = await db.collection('application').find({}).toArray();
+    }
 
     const updatedApps = await Promise.all(
-      APPS.map(async (app) => {
-        let preciseSize = app.size; // fallback
-        
-        const fileName = apkFilenames[app.id];
-        if (fileName) {
-          // 1. Try to fetch from S3
+      dbApps.map(async (app) => {
+        const fallbackStatic = APPS.find((a) => a.id === (app.appId || app.id)) || ({} as any);
+        const resolvedName = app.name || fallbackStatic.name || app.appId || 'Unknown App';
+        const resolvedCategory = app.category || fallbackStatic.category || 'General';
+        const resolvedTeaser = app.teaser || fallbackStatic.teaser || 'Experience this app';
+        const resolvedDescription = app.fullDescription || fallbackStatic.fullDescription || app.description || '';
+        const resolvedIcon = app.icon || fallbackStatic.icon || '/placeholder-logo.png';
+        const resolvedVersion = app.version || fallbackStatic.version || 'v1.0.0';
+        const resolvedFileName = app.fileName || fallbackStatic.fileName || `${resolvedName}-release.apk`;
+        const resolvedS3Key = app.s3Key || fallbackStatic.s3Key || resolvedFileName;
+        const resolvedScreenshots = app.screenshots || fallbackStatic.screenshots || [];
+        let preciseSize = app.size || fallbackStatic.size || '10.0 MB';
+
+        if (resolvedS3Key) {
+          // 1. Try to fetch real size from AWS S3
           if (process.env.AWS_ACCESS_KEY_ID && process.env.AWS_SECRET_ACCESS_KEY) {
             try {
               const headCommand = new HeadObjectCommand({
-                Bucket: process.env.AWS_S3_BUCKET_NAME || 'katyalstore',
-                Key: fileName,
+                Bucket: BUCKET_NAME,
+                Key: resolvedS3Key,
               });
               const headResult = await s3Client.send(headCommand);
               if (headResult.ContentLength) {
-                preciseSize = formatBytes(headResult.ContentLength);
+                preciseSize = formatExactSize(headResult.ContentLength);
               }
             } catch (s3Error) {
-              console.warn(`[KatyalStore] S3 HeadObject failed for ${fileName}, falling back to local files:`, s3Error);
+              // Non-blocking fallback
             }
           }
           
-          // 2. Try to fallback to local file system
-          if (preciseSize === app.size) {
-            const filePath = path.join(process.cwd(), 'apks', fileName);
+          // 2. Try to fallback to local file system in apks/
+          if (preciseSize === (app.size || fallbackStatic.size)) {
+            const filePath = path.join(process.cwd(), 'apks', resolvedFileName);
             if (fs.existsSync(filePath)) {
               const stat = fs.statSync(filePath);
-              preciseSize = formatBytes(stat.size);
+              preciseSize = formatExactSize(stat.size);
             }
           }
         }
 
-        // Fetch downloads count from application collection
-        const dbStats = await db.collection('application').findOne({ appId: app.id }) || { downloadsCount: 0 };
-
         // Dynamically count reviews and calculate average rating from reviews collection
-        const reviews = await db.collection('reviews').find({ appName: app.name }).toArray();
+        const reviews = await db.collection('reviews').find({ appName: resolvedName }).toArray();
         const reviewsCount = reviews.length;
         const averageRating = reviewsCount > 0
           ? reviews.reduce((sum: number, r: any) => sum + r.rating, 0) / reviewsCount
-          : 0;
+          : (app.averageRating || 5.0);
 
-        // Save back to application collection to ensure collection stats are always in sync
+        // Permanently persist all resolved fields to MongoDB
         await db.collection('application').updateOne(
-          { appId: app.id },
-          { $set: { reviewsCount, averageRating } },
-          { upsert: true }
+          { appId: app.appId || app.id },
+          {
+            $set: {
+              name: resolvedName,
+              category: resolvedCategory,
+              teaser: resolvedTeaser,
+              fullDescription: resolvedDescription,
+              icon: resolvedIcon,
+              version: resolvedVersion,
+              fileName: resolvedFileName,
+              s3Key: resolvedS3Key,
+              screenshots: resolvedScreenshots,
+              reviewsCount,
+              averageRating,
+              size: preciseSize,
+            },
+          }
         );
 
         return {
-          ...app,
+          id: app.appId || app.id,
+          appId: app.appId || app.id,
+          name: resolvedName,
+          category: resolvedCategory,
           size: preciseSize,
-          downloadsCount: dbStats.downloadsCount || 0,
+          teaser: resolvedTeaser,
+          fullDescription: resolvedDescription,
+          icon: resolvedIcon,
+          version: resolvedVersion,
+          fileName: resolvedFileName,
+          s3Key: resolvedS3Key,
+          releaseNotes: app.releaseNotes || 'Latest release',
+          screenshots: app.screenshots || fallbackStatic.screenshots || [],
+          downloadsCount: app.downloadsCount || 0,
           reviewsCount,
           averageRating,
+          updatedAt: app.updatedAt,
+          createdAt: app.createdAt,
         };
       })
     );
+
+
 
     return NextResponse.json(updatedApps);
   } catch (error) {
@@ -89,3 +147,4 @@ export async function GET(request: NextRequest) {
     );
   }
 }
+

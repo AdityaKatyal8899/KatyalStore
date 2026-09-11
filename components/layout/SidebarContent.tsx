@@ -101,19 +101,20 @@ export function SidebarContent({ section, onClose, currentUser }: SidebarContent
 
                     <div className="bg-white border-2 border-black p-4">
                       <p className="text-xs text-black font-black mb-3 uppercase tracking-tight">
-                        Account Settings
+                        Store Management
                       </p>
-                      <button className="w-full bg-white border-2 border-black px-4 py-2 text-black font-black uppercase tracking-tight text-sm mb-2 hover:shadow-[4px_4px_0px_0px_#000000] transition-shadow">
-                        Edit Profile
-                      </button>
-                      <button className="w-full bg-white border-2 border-black px-4 py-2 text-black font-black uppercase tracking-tight text-sm hover:shadow-[4px_4px_0px_0px_#000000] transition-shadow">
-                        Privacy Settings
-                      </button>
+                      <a
+                        href="/dashboard"
+                        className="w-full bg-yellow-300 border-2 border-black px-4 py-2.5 text-black font-black uppercase tracking-tight text-sm mb-2 hover:shadow-[4px_4px_0px_0px_#000000] transition-shadow flex items-center justify-center gap-2 block text-center"
+                      >
+                        👑 Owner Dashboard
+                      </a>
                     </div>
                   </div>
                 )}
               </div>
             )}
+
           </motion.div>
         </motion.div>
       )}

@@ -1,5 +1,10 @@
 import { S3Client } from '@aws-sdk/client-s3';
 
+export const BUCKET_NAME =
+  process.env.AWS_BUCKET_NAME ||
+  process.env.AWS_S3_BUCKET_NAME ||
+  'katyalstore';
+
 export const s3Client = new S3Client({
   region: process.env.AWS_REGION || 'ap-south-1',
   credentials: {
@@ -7,3 +12,4 @@ export const s3Client = new S3Client({
     secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || '',
   },
 });
+
