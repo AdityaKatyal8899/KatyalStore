@@ -89,7 +89,7 @@ export async function POST(request: NextRequest) {
 
     // Validate owner permissions if provided
     if (ownerEmail && !isOwnerEmail(ownerEmail)) {
-      return NextResponse.json({ error: 'Unauthorized. Owner privileges required.' }, { status: 403 });
+      return NextResponse.json({ error: 'Owner not found or unauthorized.' }, { status: 404 });
     }
 
     if (!name || !category || !teaser || !fullDescription || !fileName) {
@@ -185,7 +185,7 @@ export async function PUT(request: NextRequest) {
 
     // Validate owner permissions if provided
     if (ownerEmail && !isOwnerEmail(ownerEmail)) {
-      return NextResponse.json({ error: 'Unauthorized. Owner privileges required.' }, { status: 403 });
+      return NextResponse.json({ error: 'Owner not found or unauthorized.' }, { status: 404 });
     }
 
     if (!id) {
@@ -254,7 +254,7 @@ export async function DELETE(request: NextRequest) {
     const ownerEmail = searchParams.get('ownerEmail');
 
     if (ownerEmail && !isOwnerEmail(ownerEmail)) {
-      return NextResponse.json({ error: 'Unauthorized. Owner privileges required.' }, { status: 403 });
+      return NextResponse.json({ error: 'Owner not found or unauthorized.' }, { status: 404 });
     }
 
     if (!id) {

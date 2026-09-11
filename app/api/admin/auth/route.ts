@@ -31,7 +31,14 @@ export async function GET(request: NextRequest) {
   }
 
   const isOwner = isOwnerEmail(email);
-  return NextResponse.json({ isOwner, email });
+  if (!isOwner) {
+    return NextResponse.json(
+      { isOwner: false, error: 'Owner not found: This email is not registered as an authorized owner.' },
+      { status: 404 }
+    );
+  }
+
+  return NextResponse.json({ isOwner: true, email });
 }
 
 export async function POST(request: NextRequest) {
@@ -51,8 +58,8 @@ export async function POST(request: NextRequest) {
     // Check if email has owner authorization
     if (!isOwnerEmail(normalizedEmail)) {
       return NextResponse.json(
-        { error: 'Access Denied: This email does not have owner dashboard privileges.' },
-        { status: 403 }
+        { error: 'Owner not found: This email is not registered as an authorized owner.' },
+        { status: 404 }
       );
     }
 

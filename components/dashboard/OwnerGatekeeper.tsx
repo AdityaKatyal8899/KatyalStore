@@ -1,3 +1,4 @@
+
 'use client';
 
 import { motion, AnimatePresence } from 'framer-motion';
@@ -137,7 +138,7 @@ export function OwnerGatekeeper({ onAuthenticated }: OwnerGatekeeperProps) {
                         required
                         value={email}
                         onChange={(e) => setEmail(e.target.value)}
-                        placeholder="owner@katyalstore.com"
+                        placeholder="adityakatyal8899@gmail.com"
                         className="w-full bg-white border-2 border-black px-4 py-2.5 text-black placeholder-gray-400 focus:outline-none focus:bg-yellow-100 font-bold text-sm transition"
                         autoFocus
                       />
