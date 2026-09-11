@@ -40,24 +40,58 @@ export function ScreenshotUploadZone({
           const url = await onUploadFile(file);
           if (url) newUrls.push(url);
         } else {
-          // Default upload via /api/admin/upload with app/version hierarchy
-          const formData = new FormData();
-          formData.append('file', file);
-          if (appId) formData.append('appId', appId);
-          if (version) formData.append('version', version);
-          formData.append('folder', 'screenshots');
-          formData.append('type', 'screenshots');
-          formData.append('customName', `screenshot-${Date.now()}-${file.name.replace(/[^a-zA-Z0-9.-]/g, '_')}`);
-
-          const res = await fetch('/api/admin/upload', {
-            method: 'POST',
-            body: formData,
+          // 1. Try S3 presigned direct upload first
+          const customName = `screenshot-${Date.now()}-${file.name.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
+          const qParams = new URLSearchParams({
+            fileName: customName,
+            appId: appId || 'general',
+            version: version || 'v1.0.0',
+            type: 'screenshots',
+            folder: 'screenshots',
+            contentType: file.type || 'image/png',
           });
 
-          if (res.ok) {
-            const data = await res.json();
-            const url = data.url || data.s3Url || data.iconUrl || `/screenshots/${data.fileName}`;
-            if (url) newUrls.push(url);
+          let uploaded = false;
+          try {
+            const presignRes = await fetch(`/api/admin/upload?${qParams.toString()}`);
+            if (presignRes.ok) {
+              const { uploadUrl, s3Url } = await presignRes.json();
+              if (uploadUrl) {
+                const s3Res = await fetch(uploadUrl, {
+                  method: 'PUT',
+                  headers: { 'Content-Type': file.type || 'image/png' },
+                  body: file,
+                });
+                if (s3Res.ok && s3Url) {
+                  newUrls.push(s3Url);
+                  uploaded = true;
+                }
+              }
+            }
+          } catch (e) {
+            console.warn('[ScreenshotUploadZone] Direct S3 upload failed, trying fallback:', e);
+          }
+
+          // 2. Server fallback if direct S3 wasn't available
+          if (!uploaded) {
+            const formData = new FormData();
+            formData.append('file', file);
+            if (appId) formData.append('appId', appId);
+            if (version) formData.append('version', version);
+            formData.append('folder', 'screenshots');
+            formData.append('type', 'screenshots');
+            formData.append('customName', customName);
+
+            const res = await fetch('/api/admin/upload', {
+              method: 'POST',
+              body: formData,
+            });
+
+            if (res.ok) {
+              const data = await res.json();
+              const url = data.url || data.s3Url || data.iconUrl || `/screenshots/${data.fileName}`;
+              if (url) newUrls.push(url);
+            }
           }
         }
       } catch (err) {

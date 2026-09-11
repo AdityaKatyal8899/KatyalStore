@@ -102,7 +102,6 @@ export async function GET(request: NextRequest) {
         Bucket: BUCKET_NAME,
         Key: s3Key,
         ContentType: contentType,
-        ResponseContentDisposition: `attachment; filename="${path.basename(fileName)}"`,
       });
 
       // 15 minutes expiration for uploading

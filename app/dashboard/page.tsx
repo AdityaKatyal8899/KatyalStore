@@ -210,15 +210,16 @@ export default function OwnerDashboardPage() {
     const targetType = meta?.type || (isImage ? 'icon' : 'apk');
     const targetAppId = meta?.appId || meta?.appName || selectedAppId || 'general';
     const targetVersion = meta?.version || updateVersion || 'v1.0.0';
+    const resolvedContentType = file.type || (isImage ? 'image/png' : 'application/vnd.android.package-archive');
 
-    // 1. First attempt direct S3 Presigned URL upload
+    // 1. First attempt direct S3 Presigned URL upload (Direct to S3, bypassing Vercel 4.5MB payload limit)
     try {
       const qParams = new URLSearchParams({
         fileName: file.name,
         appId: targetAppId,
         version: targetVersion,
         type: targetType,
-        contentType: file.type || (isImage ? 'image/png' : 'application/vnd.android.package-archive'),
+        contentType: resolvedContentType,
       });
 
       const presignRes = await fetch(`/api/admin/upload?${qParams.toString()}`);
@@ -229,7 +230,7 @@ export default function OwnerDashboardPage() {
           const s3UploadRes = await fetch(uploadUrl, {
             method: 'PUT',
             headers: {
-              'Content-Type': file.type || (isImage ? 'image/png' : 'application/vnd.android.package-archive'),
+              'Content-Type': resolvedContentType,
             },
             body: file,
           });
@@ -243,14 +244,25 @@ export default function OwnerDashboardPage() {
               size: sizeMb,
               iconUrl: isImage ? s3Url : undefined,
             };
+          } else {
+            console.error('[Dashboard Upload] S3 Direct PUT returned error status:', s3UploadRes.status, s3UploadRes.statusText);
           }
         }
+      } else {
+        const errJson = await presignRes.json().catch(() => ({}));
+        console.warn('[Dashboard Upload] S3 presign failed:', errJson);
       }
     } catch (s3PresignError) {
-      console.warn('[Dashboard Upload] S3 Direct Presigned PUT failed, falling back to server upload:', s3PresignError);
+      console.warn('[Dashboard Upload] S3 Direct Presigned PUT failed, checking fallback:', s3PresignError);
     }
 
-    // 2. Fallback to server-side multipart upload
+    // 2. Fallback to server-side multipart upload (only for smaller files to prevent Vercel 413)
+    if (file.size > 4 * 1024 * 1024) {
+      throw new Error(
+        `Direct S3 upload failed and installer size (${(file.size / (1024 * 1024)).toFixed(1)} MB) exceeds Vercel Serverless Function limit. Please ensure AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_BUCKET_NAME, and S3 Bucket CORS are configured.`
+      );
+    }
+
     onProgress(50);
     const formData = new FormData();
     formData.append('file', file);
@@ -266,8 +278,8 @@ export default function OwnerDashboardPage() {
 
     onProgress(90);
     if (!uploadRes.ok) {
-      const errorData = await uploadRes.json();
-      throw new Error(errorData.error || 'File upload failed');
+      const errorData = await uploadRes.json().catch(() => ({}));
+      throw new Error(errorData.error || `File upload failed with status ${uploadRes.status}`);
     }
 
     const uploadData = await uploadRes.json();
