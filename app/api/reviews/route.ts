@@ -1,21 +1,43 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getDb } from '@/lib/db';
 import { ObjectId } from 'mongodb';
+import { sendReviewNotification } from '@/lib/emailService';
 
 async function updateApplicationStats(db: any, appName: string) {
-  const appId = appName.toLowerCase() === 'cowatch' ? 'cowatch' : 'fetchflow';
-  const reviews = await db.collection('reviews').find({ appName }).toArray();
+  const targetAppId = appName.toLowerCase().replace(/[^a-z0-9]/g, '-');
+  const appDoc = await db.collection('application').findOne({
+    $or: [
+      { appId: targetAppId },
+      { name: { $regex: new RegExp(`^${appName}$`, 'i') } }
+    ]
+  });
+
+  const resolvedAppId = appDoc?.appId || targetAppId;
+  const resolvedName = appDoc?.name || appName;
+
+  const reviews = await db.collection('reviews').find({
+    $or: [
+      { appName: { $regex: new RegExp(`^${resolvedName}$`, 'i') } },
+      { appName: { $regex: new RegExp(`^${appName}$`, 'i') } },
+      { appName: resolvedAppId }
+    ]
+  }).toArray();
+
   const reviewsCount = reviews.length;
   const averageRating = reviewsCount > 0
-    ? reviews.reduce((sum: number, r: any) => sum + r.rating, 0) / reviewsCount
-    : 0;
+    ? reviews.reduce((sum: number, r: any) => sum + (Number(r.rating) || 0), 0) / reviewsCount
+    : 5.0;
 
-  await db.collection('application').updateOne(
-    { appId },
-    { $set: { reviewsCount, averageRating } },
-    { upsert: true }
-  );
-  console.log(`[KatyalStore] Application collection updated for ${appId}: count=${reviewsCount}, avgRating=${averageRating}`);
+  const roundedAvg = Math.round(averageRating * 10) / 10;
+
+  if (appDoc) {
+    await db.collection('application').updateOne(
+      { appId: resolvedAppId },
+      { $set: { reviewsCount, averageRating: roundedAvg } }
+    );
+  }
+  console.log(`[KatyalStore] Application collection updated for ${resolvedAppId}: count=${reviewsCount}, avgRating=${roundedAvg}`);
+  return { appDoc, resolvedAppId, resolvedName, reviewsCount, averageRating: roundedAvg };
 }
 
 export async function POST(request: NextRequest) {
@@ -68,9 +90,24 @@ export async function POST(request: NextRequest) {
     );
 
     // Update application stats (reviewsCount and averageRating)
-    await updateApplicationStats(db, appName);
+    const stats = await updateApplicationStats(db, appName);
 
     console.log('[KatyalStore] MongoDB Review submitted & reviewsCount incremented:', review);
+
+    // Asynchronously dispatch Neo-Brutalist review notification email
+    sendReviewNotification({
+      to: stats.appDoc?.ownerEmail,
+      appName: stats.resolvedName,
+      appId: stats.resolvedAppId,
+      reviewerName: author || 'Store Guest',
+      reviewerEmail: email,
+      rating: numericRating,
+      title,
+      content,
+      totalReviews: stats.reviewsCount,
+      averageRating: stats.averageRating,
+      isEdit: false,
+    }).catch((err) => console.error('[KatyalStore Email] Failed to send review notification:', err));
 
     return NextResponse.json(
       { 
@@ -197,9 +234,24 @@ export async function PUT(request: NextRequest) {
     );
 
     // Update application stats (reviewsCount and averageRating)
-    await updateApplicationStats(db, review.appName);
+    const stats = await updateApplicationStats(db, review.appName);
 
     console.log('[KatyalStore] MongoDB Review updated:', id);
+
+    // Asynchronously dispatch Neo-Brutalist review update notification email
+    sendReviewNotification({
+      to: stats.appDoc?.ownerEmail,
+      appName: stats.resolvedName,
+      appId: stats.resolvedAppId,
+      reviewerName: review.author || 'Store Guest',
+      reviewerEmail: email,
+      rating: numericRating,
+      title,
+      content,
+      totalReviews: stats.reviewsCount,
+      averageRating: stats.averageRating,
+      isEdit: true,
+    }).catch((err) => console.error('[KatyalStore Email] Failed to send review update notification:', err));
 
     return NextResponse.json({
       success: true,

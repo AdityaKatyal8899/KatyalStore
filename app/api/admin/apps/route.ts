@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getDb } from '@/lib/db';
 import { APPS } from '@/lib/appData';
 import { isOwnerEmail } from '@/lib/authUtils';
+import { sendAppPublishNotification } from '@/lib/emailService';
 
 export async function GET(request: NextRequest) {
   try {
@@ -125,6 +126,7 @@ export async function POST(request: NextRequest) {
       s3Key: (s3Key || fileName).trim(),
       releaseNotes: releaseNotes?.trim() || 'Initial store release',
       screenshots: Array.isArray(screenshots) ? screenshots : [],
+      ownerEmail: ownerEmail?.trim() || undefined,
       downloadsCount: 0,
       reviewsCount: 0,
       averageRating: 5.0,
@@ -134,6 +136,19 @@ export async function POST(request: NextRequest) {
 
     await db.collection('application').insertOne(newAppDoc);
     console.log(`[KatyalStore Admin] Published new app '${name}' (${appId}) with file '${fileName}'`);
+
+    // Asynchronously dispatch Neo-Brutalist notification email
+    sendAppPublishNotification({
+      to: ownerEmail,
+      appName: newAppDoc.name,
+      appId: newAppDoc.appId,
+      version: newAppDoc.version,
+      category: newAppDoc.category,
+      s3Key: newAppDoc.s3Key,
+      size: newAppDoc.size,
+      releaseNotes: newAppDoc.releaseNotes,
+      isUpdate: false,
+    }).catch((err) => console.error('[KatyalStore Email] Failed to send publish notification:', err));
 
     return NextResponse.json({
       success: true,
@@ -199,6 +214,7 @@ export async function PUT(request: NextRequest) {
     if (s3Key || fileName) updateFields.s3Key = (s3Key || fileName).trim();
     if (releaseNotes) updateFields.releaseNotes = releaseNotes.trim();
     if (Array.isArray(screenshots)) updateFields.screenshots = screenshots;
+    if (ownerEmail) updateFields.ownerEmail = ownerEmail.trim();
 
     await db.collection('application').updateOne(
       { appId: id },
@@ -206,6 +222,19 @@ export async function PUT(request: NextRequest) {
     );
 
     console.log(`[KatyalStore Admin] Pushed update for '${id}':`, updateFields);
+
+    // Asynchronously dispatch Neo-Brutalist update notification email
+    sendAppPublishNotification({
+      to: ownerEmail || existing.ownerEmail,
+      appName: updateFields.name || existing.name || id,
+      appId: id,
+      version: updateFields.version || existing.version || 'Updated',
+      category: updateFields.category || existing.category,
+      s3Key: updateFields.s3Key || existing.s3Key,
+      size: updateFields.size || existing.size,
+      releaseNotes: updateFields.releaseNotes || existing.releaseNotes,
+      isUpdate: true,
+    }).catch((err) => console.error('[KatyalStore Email] Failed to send update notification:', err));
 
     return NextResponse.json({
       success: true,

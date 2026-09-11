@@ -3,6 +3,7 @@ import { getDb } from '@/lib/db';
 import { s3Client, BUCKET_NAME } from '@/lib/s3';
 import { GetObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
+import { sendDownloadNotification } from '@/lib/emailService';
 import fs from 'fs';
 import path from 'path';
 
@@ -53,15 +54,28 @@ export async function POST(request: NextRequest) {
     });
 
     // Increment downloadsCount in application collection
+    let totalDownloads = 1;
     if (appDoc?.appId) {
-      await db.collection('application').updateOne(
+      const updateResult = await db.collection('application').findOneAndUpdate(
         { appId: appDoc.appId },
         { $inc: { downloadsCount: 1 } },
-        { upsert: true }
+        { returnDocument: 'after', upsert: true }
       );
+      totalDownloads = updateResult?.downloadsCount || (appDoc.downloadsCount || 0) + 1;
     }
 
     console.log(`[KatyalStore] MongoDB POST Download logged: ${name} (${email}) - ${resolvedName}`);
+
+    // Asynchronously dispatch Neo-Brutalist download notification email
+    sendDownloadNotification({
+      to: appDoc?.ownerEmail,
+      appName: resolvedName,
+      appId: appDoc?.appId || targetAppId,
+      version: appDoc?.version,
+      downloaderName: name,
+      downloaderEmail: email,
+      totalDownloads,
+    }).catch((err) => console.error('[KatyalStore Email] Failed to send POST download notification:', err));
 
     return NextResponse.json(
       { success: true, message: 'Download logged successfully' },
@@ -126,13 +140,25 @@ export async function GET(request: NextRequest) {
     });
 
     // Increment downloadsCount in application collection
-    await db.collection('application').updateOne(
+    const updateResult = await db.collection('application').findOneAndUpdate(
       { appId: appDoc.appId },
       { $inc: { downloadsCount: 1 } },
-      { upsert: true }
+      { returnDocument: 'after', upsert: true }
     );
+    const totalDownloads = updateResult?.downloadsCount || (appDoc.downloadsCount || 0) + 1;
 
     console.log(`[KatyalStore] MongoDB GET Download logged: ${name} (${email}) - ${appName} [${fileName}]`);
+
+    // Asynchronously dispatch Neo-Brutalist download notification email
+    sendDownloadNotification({
+      to: appDoc.ownerEmail,
+      appName: appName,
+      appId: appDoc.appId || appId.toLowerCase(),
+      version: appDoc.version,
+      downloaderName: name,
+      downloaderEmail: email,
+      totalDownloads,
+    }).catch((err) => console.error('[KatyalStore Email] Failed to send GET download notification:', err));
 
     // 1. Try to generate presigned S3 URL and redirect if credentials exist
     if (process.env.AWS_ACCESS_KEY_ID && process.env.AWS_SECRET_ACCESS_KEY) {
