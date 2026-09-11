@@ -123,7 +123,7 @@ export function OwnerGatekeeper({ onAuthenticated }: OwnerGatekeeperProps) {
                       type="text"
                       value={name}
                       onChange={(e) => setName(e.target.value)}
-                      placeholder="e.g. Aditya Katyal"
+                      placeholder="e.g. Example Name"
                       className="w-full bg-white border-2 border-black px-4 py-2.5 text-black placeholder-gray-400 focus:outline-none focus:bg-yellow-100 font-bold text-sm transition"
                     />
                   </div>
@@ -138,7 +138,7 @@ export function OwnerGatekeeper({ onAuthenticated }: OwnerGatekeeperProps) {
                         required
                         value={email}
                         onChange={(e) => setEmail(e.target.value)}
-                        placeholder="adityakatyal8899@gmail.com"
+                        placeholder="example@mail.com"
                         className="w-full bg-white border-2 border-black px-4 py-2.5 text-black placeholder-gray-400 focus:outline-none focus:bg-yellow-100 font-bold text-sm transition"
                         autoFocus
                       />
