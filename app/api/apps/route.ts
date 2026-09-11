@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getDb } from '@/lib/db';
 import { APPS, formatExactSize } from '@/lib/appData';
-import { s3Client, BUCKET_NAME } from '@/lib/s3';
+import { s3Client, BUCKET_NAME, getS3SignedReadUrl } from '@/lib/s3';
 import { HeadObjectCommand } from '@aws-sdk/client-s3';
 import fs from 'fs';
 import path from 'path';
@@ -113,6 +113,12 @@ export async function GET(request: NextRequest) {
           }
         );
 
+        // Generate signed S3 read URLs for icon and screenshots so they load with 200 OK
+        const signedIcon = await getS3SignedReadUrl(resolvedIcon);
+        const signedScreenshots = await Promise.all(
+          (resolvedScreenshots || []).map((s: string) => getS3SignedReadUrl(s))
+        );
+
         return {
           id: app.appId || app.id,
           appId: app.appId || app.id,
@@ -121,12 +127,12 @@ export async function GET(request: NextRequest) {
           size: preciseSize,
           teaser: resolvedTeaser,
           fullDescription: resolvedDescription,
-          icon: resolvedIcon,
+          icon: signedIcon,
           version: resolvedVersion,
           fileName: resolvedFileName,
           s3Key: resolvedS3Key,
           releaseNotes: app.releaseNotes || 'Latest release',
-          screenshots: app.screenshots || fallbackStatic.screenshots || [],
+          screenshots: signedScreenshots,
           downloadsCount: app.downloadsCount || 0,
           reviewsCount,
           averageRating,

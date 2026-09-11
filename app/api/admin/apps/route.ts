@@ -3,6 +3,7 @@ import { getDb } from '@/lib/db';
 import { APPS } from '@/lib/appData';
 import { isOwnerEmail } from '@/lib/authUtils';
 import { sendAppPublishNotification } from '@/lib/emailService';
+import { getS3SignedReadUrl } from '@/lib/s3';
 
 export async function GET(request: NextRequest) {
   try {
@@ -40,25 +41,35 @@ export async function GET(request: NextRequest) {
       apps = await db.collection('application').find({}).toArray();
     }
 
-    // Format id from appId and enrich any missing fields
-    const formatted = apps.map((app) => {
-      const fallbackStatic = APPS.find((a) => a.id === (app.appId || app.id)) || ({} as any);
-      return {
-        ...app,
-        id: app.appId || app.id,
-        name: app.name || fallbackStatic.name || app.appId || 'Unknown App',
-        category: app.category || fallbackStatic.category || 'General',
-        size: app.size || fallbackStatic.size || '10.0 MB',
-        teaser: app.teaser || fallbackStatic.teaser || '',
-        fullDescription: app.fullDescription || fallbackStatic.fullDescription || '',
-        icon: app.icon || fallbackStatic.icon || '/placeholder-logo.png',
-        version: app.version || fallbackStatic.version || 'v1.0.0',
-        fileName: app.fileName || fallbackStatic.fileName || `${app.name || app.appId}-release.apk`,
-        s3Key: app.s3Key || fallbackStatic.s3Key || app.fileName || `${app.name || app.appId}-release.apk`,
-        screenshots: app.screenshots || fallbackStatic.screenshots || [],
-        _id: app._id.toString(),
-      };
-    });
+    // Format id from appId, enrich any missing fields, and generate presigned read URLs
+    const formatted = await Promise.all(
+      apps.map(async (app) => {
+        const fallbackStatic = APPS.find((a) => a.id === (app.appId || app.id)) || ({} as any);
+        const rawIcon = app.icon || fallbackStatic.icon || '/placeholder-logo.png';
+        const rawScreenshots = app.screenshots || fallbackStatic.screenshots || [];
+
+        const signedIcon = await getS3SignedReadUrl(rawIcon);
+        const signedScreenshots = await Promise.all(
+          (rawScreenshots || []).map((s: string) => getS3SignedReadUrl(s))
+        );
+
+        return {
+          ...app,
+          id: app.appId || app.id,
+          name: app.name || fallbackStatic.name || app.appId || 'Unknown App',
+          category: app.category || fallbackStatic.category || 'General',
+          size: app.size || fallbackStatic.size || '10.0 MB',
+          teaser: app.teaser || fallbackStatic.teaser || '',
+          fullDescription: app.fullDescription || fallbackStatic.fullDescription || '',
+          icon: signedIcon,
+          version: app.version || fallbackStatic.version || 'v1.0.0',
+          fileName: app.fileName || fallbackStatic.fileName || `${app.name || app.appId}-release.apk`,
+          s3Key: app.s3Key || fallbackStatic.s3Key || app.fileName || `${app.name || app.appId}-release.apk`,
+          screenshots: signedScreenshots,
+          _id: app._id.toString(),
+        };
+      })
+    );
 
     return NextResponse.json(formatted);
 

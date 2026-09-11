@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { s3Client, BUCKET_NAME } from '@/lib/s3';
+import { s3Client, BUCKET_NAME, getS3SignedReadUrl } from '@/lib/s3';
 import { PutObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { formatExactSize } from '@/lib/appData';
@@ -95,8 +95,6 @@ export async function GET(request: NextRequest) {
       isImage,
     });
 
-    const region = process.env.AWS_REGION || 'ap-south-1';
-
     if (process.env.AWS_ACCESS_KEY_ID && process.env.AWS_SECRET_ACCESS_KEY) {
       const command = new PutObjectCommand({
         Bucket: BUCKET_NAME,
@@ -106,7 +104,8 @@ export async function GET(request: NextRequest) {
 
       // 15 minutes expiration for uploading
       const uploadUrl = await getSignedUrl(s3Client, command, { expiresIn: 900 });
-      const publicS3Url = `https://${BUCKET_NAME}.s3.${region}.amazonaws.com/${s3Key}`;
+      // Generate signed read URL for immediate UI preview
+      const signedReadUrl = isImage ? await getS3SignedReadUrl(s3Key) : `https://${BUCKET_NAME}.s3.${process.env.AWS_REGION || 'ap-south-1'}.amazonaws.com/${s3Key}`;
 
       return NextResponse.json({
         success: true,
@@ -114,8 +113,8 @@ export async function GET(request: NextRequest) {
         key: s3Key,
         s3Key,
         fileName: path.basename(fileName),
-        s3Url: publicS3Url,
-        url: publicS3Url,
+        s3Url: signedReadUrl,
+        url: signedReadUrl,
         folder: folderType,
         bucket: BUCKET_NAME,
       });
