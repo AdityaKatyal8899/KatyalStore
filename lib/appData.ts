@@ -53,7 +53,7 @@ export const APPS: App[] = [
   {
     id: 'fetchflow',
     name: 'FetchFlow',
-    category: 'Developer Tools',
+    category: 'Utility Tools',
     size: '106.8 MB',
     teaser: 'Looking for a place for downloading media without ads? FetchFlow is the one to get this done.',
     fullDescription: 'Frustrated with the ads during downloading your contnet? FetchFlow solves this problem. You can download the reels/YouTube Videos/Audios without watching any ad.',
