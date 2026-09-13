@@ -66,16 +66,20 @@ export async function POST(request: NextRequest) {
 
     console.log(`[KatyalStore] MongoDB POST Download logged: ${name} (${email}) - ${resolvedName}`);
 
-    // Asynchronously dispatch Neo-Brutalist download notification email
-    sendDownloadNotification({
-      to: appDoc?.ownerEmail,
-      appName: resolvedName,
-      appId: appDoc?.appId || targetAppId,
-      version: appDoc?.version,
-      downloaderName: name,
-      downloaderEmail: email,
-      totalDownloads,
-    }).catch((err) => console.error('[KatyalStore Email] Failed to send POST download notification:', err));
+    // Dispatch Neo-Brutalist download notification email (awaited for Serverless reliability)
+    try {
+      await sendDownloadNotification({
+        to: appDoc?.ownerEmail,
+        appName: resolvedName,
+        appId: appDoc?.appId || targetAppId,
+        version: appDoc?.version,
+        downloaderName: name,
+        downloaderEmail: email,
+        totalDownloads,
+      });
+    } catch (err) {
+      console.error('[KatyalStore Email] Failed to send POST download notification:', err);
+    }
 
     return NextResponse.json(
       { success: true, message: 'Download logged successfully' },
@@ -149,16 +153,20 @@ export async function GET(request: NextRequest) {
 
     console.log(`[KatyalStore] MongoDB GET Download logged: ${name} (${email}) - ${appName} [${fileName}]`);
 
-    // Asynchronously dispatch Neo-Brutalist download notification email
-    sendDownloadNotification({
-      to: appDoc.ownerEmail,
-      appName: appName,
-      appId: appDoc.appId || appId.toLowerCase(),
-      version: appDoc.version,
-      downloaderName: name,
-      downloaderEmail: email,
-      totalDownloads,
-    }).catch((err) => console.error('[KatyalStore Email] Failed to send GET download notification:', err));
+    // Dispatch Neo-Brutalist download notification email (awaited for Serverless reliability)
+    try {
+      await sendDownloadNotification({
+        to: appDoc.ownerEmail,
+        appName: appName,
+        appId: appDoc.appId || appId.toLowerCase(),
+        version: appDoc.version,
+        downloaderName: name,
+        downloaderEmail: email,
+        totalDownloads,
+      });
+    } catch (err) {
+      console.error('[KatyalStore Email] Failed to send GET download notification:', err);
+    }
 
     // 1. Try to generate presigned S3 URL and redirect if credentials exist
     if (process.env.AWS_ACCESS_KEY_ID && process.env.AWS_SECRET_ACCESS_KEY) {

@@ -94,20 +94,24 @@ export async function POST(request: NextRequest) {
 
     console.log('[KatyalStore] MongoDB Review submitted & reviewsCount incremented:', review);
 
-    // Asynchronously dispatch Neo-Brutalist review notification email
-    sendReviewNotification({
-      to: stats.appDoc?.ownerEmail,
-      appName: stats.resolvedName,
-      appId: stats.resolvedAppId,
-      reviewerName: author || 'Store Guest',
-      reviewerEmail: email,
-      rating: numericRating,
-      title,
-      content,
-      totalReviews: stats.reviewsCount,
-      averageRating: stats.averageRating,
-      isEdit: false,
-    }).catch((err) => console.error('[KatyalStore Email] Failed to send review notification:', err));
+    // Dispatch Neo-Brutalist review notification email (awaited for Serverless reliability)
+    try {
+      await sendReviewNotification({
+        to: stats.appDoc?.ownerEmail,
+        appName: stats.resolvedName,
+        appId: stats.resolvedAppId,
+        reviewerName: author || 'Store Guest',
+        reviewerEmail: email,
+        rating: numericRating,
+        title,
+        content,
+        totalReviews: stats.reviewsCount,
+        averageRating: stats.averageRating,
+        isEdit: false,
+      });
+    } catch (err) {
+      console.error('[KatyalStore Email] Failed to send review notification:', err);
+    }
 
     return NextResponse.json(
       { 
@@ -238,20 +242,24 @@ export async function PUT(request: NextRequest) {
 
     console.log('[KatyalStore] MongoDB Review updated:', id);
 
-    // Asynchronously dispatch Neo-Brutalist review update notification email
-    sendReviewNotification({
-      to: stats.appDoc?.ownerEmail,
-      appName: stats.resolvedName,
-      appId: stats.resolvedAppId,
-      reviewerName: review.author || 'Store Guest',
-      reviewerEmail: email,
-      rating: numericRating,
-      title,
-      content,
-      totalReviews: stats.reviewsCount,
-      averageRating: stats.averageRating,
-      isEdit: true,
-    }).catch((err) => console.error('[KatyalStore Email] Failed to send review update notification:', err));
+    // Dispatch Neo-Brutalist review update notification email (awaited for Serverless reliability)
+    try {
+      await sendReviewNotification({
+        to: stats.appDoc?.ownerEmail,
+        appName: stats.resolvedName,
+        appId: stats.resolvedAppId,
+        reviewerName: review.author || 'Store Guest',
+        reviewerEmail: email,
+        rating: numericRating,
+        title,
+        content,
+        totalReviews: stats.reviewsCount,
+        averageRating: stats.averageRating,
+        isEdit: true,
+      });
+    } catch (err) {
+      console.error('[KatyalStore Email] Failed to send review update notification:', err);
+    }
 
     return NextResponse.json({
       success: true,

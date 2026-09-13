@@ -1,24 +1,32 @@
 import nodemailer from 'nodemailer';
 import { getOwnerEmails } from './authUtils';
 
-// Configure nodemailer transporter
-const isSmtpConfigured = !!(
-  process.env.SMTP_HOST &&
-  process.env.SMTP_USER &&
-  process.env.SMTP_PASS
-);
-
-const transporter = isSmtpConfigured
-  ? nodemailer.createTransport({
+// Configure nodemailer transporter helper for Serverless environments
+function getTransporter() {
+  if (
+    process.env.SMTP_HOST &&
+    process.env.SMTP_USER &&
+    process.env.SMTP_PASS
+  ) {
+    const port = Number(process.env.SMTP_PORT || '465');
+    const isExplicitSecure = process.env.SMTP_SECURE === 'true';
+    const isPort465 = port === 465;
+    
+    return nodemailer.createTransport({
       host: process.env.SMTP_HOST,
-      port: Number(process.env.SMTP_PORT || '465'),
-      secure: process.env.SMTP_SECURE === 'true',
+      port,
+      secure: isExplicitSecure || isPort465,
       auth: {
         user: process.env.SMTP_USER,
         pass: process.env.SMTP_PASS,
       },
-    })
-  : null;
+      connectionTimeout: 8000,
+      greetingTimeout: 8000,
+      socketTimeout: 12000,
+    });
+  }
+  return null;
+}
 
 const SENDER_EMAIL = process.env.SMTP_FROM || `"KatyalStore Alerts" <no-reply@katyalstore.com>`;
 const STORE_URL = process.env.NEXT_PUBLIC_APP_URL || process.env.APP_URL || 'https://katyalstore.com';
@@ -164,7 +172,11 @@ export async function sendAppPublishNotification({
   releaseNotes?: string;
   isUpdate?: boolean;
 }) {
-  const recipients = to ? [to] : getOwnerEmails();
+  const ownerList = getOwnerEmails();
+  const recipients = Array.from(
+    new Set([...(to ? [to.trim().toLowerCase()] : []), ...ownerList])
+  ).filter(Boolean);
+
   const subject = isUpdate
     ? `🚀 [KatyalStore] Update Live: ${appName} (${version})`
     : `✨ [KatyalStore] App Published: ${appName} (${version})`;
@@ -220,7 +232,11 @@ export async function sendDownloadNotification({
   downloaderEmail?: string;
   totalDownloads?: number;
 }) {
-  const recipients = to ? [to] : getOwnerEmails();
+  const ownerList = getOwnerEmails();
+  const recipients = Array.from(
+    new Set([...(to ? [to.trim().toLowerCase()] : []), ...ownerList])
+  ).filter(Boolean);
+
   const subject = `📥 [KatyalStore] New Download: ${appName} (${downloaderName || 'Store Guest'})`;
   const badgeColor = '#86EFAC'; // Green
 
@@ -277,7 +293,11 @@ export async function sendReviewNotification({
   averageRating?: number;
   isEdit?: boolean;
 }) {
-  const recipients = to ? [to] : getOwnerEmails();
+  const ownerList = getOwnerEmails();
+  const recipients = Array.from(
+    new Set([...(to ? [to.trim().toLowerCase()] : []), ...ownerList])
+  ).filter(Boolean);
+
   const stars = '★'.repeat(Math.round(rating)) + '☆'.repeat(Math.max(0, 5 - Math.round(rating)));
   const subject = `💬 [KatyalStore] ${isEdit ? 'Review Updated' : 'New Review'}: ${appName} (${stars} ${rating.toFixed(1)})`;
   const badgeColor = '#93C5FD'; // Blue
@@ -327,7 +347,12 @@ async function dispatchEmail({
   text: string;
   html: string;
 }) {
-  if (recipients.length === 0) return;
+  if (!recipients || recipients.length === 0) {
+    console.warn('[KatyalStore EmailService] No recipients found. Set OWNER_EMAILS in env or provide ownerEmail.');
+    return;
+  }
+
+  const transporter = getTransporter();
 
   if (transporter) {
     try {
