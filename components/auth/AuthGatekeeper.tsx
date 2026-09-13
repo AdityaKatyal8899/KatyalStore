@@ -2,6 +2,7 @@
 
 import { motion, AnimatePresence } from 'framer-motion';
 import { useState } from 'react';
+import { LuminanceSlider } from '@/components/theme/LuminanceSlider';
 
 interface AuthGatekeeperProps {
   onAuthenticated: (userData: { name: string; email: string }) => void;
@@ -70,25 +71,34 @@ export function AuthGatekeeper({ onAuthenticated }: AuthGatekeeperProps) {
     <AnimatePresence>
       {isVisible && (
         <motion.div
-          className="fixed inset-0 bg-[#FDFBF7]/80 backdrop-blur-md flex items-center justify-center z-50"
+          className="fixed inset-0 bg-black/60 backdrop-blur-md flex items-center justify-center z-50 p-4"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           transition={{ duration: 0.2 }}
         >
+          {/* Top-right Lightness Slider on login */}
+          <div className="absolute top-6 right-6 z-50">
+            <LuminanceSlider />
+          </div>
+
           <motion.div
-            className="bg-white border-4 border-black p-8 w-full max-w-sm shadow-[8px_8px_0px_0px_#000000]"
+            className="bg-[var(--theme-surface)] text-[var(--theme-text-primary)] border-4 border-[var(--theme-border)] p-8 w-full max-w-sm shadow-[8px_8px_0px_0px_var(--theme-shadow-color)] relative"
             initial={{ scale: 0.9, rotate: -2 }}
             animate={{ scale: 1, rotate: 0 }}
             exit={{ scale: 0.9, rotate: 2 }}
             transition={{ duration: 0.3, type: 'spring', stiffness: 400 }}
           >
-            <h1 className="text-4xl font-black text-black mb-1">KatyalStore</h1>
-            <p className="text-black text-sm font-bold mb-8 uppercase tracking-tight">Enter the store</p>
+            <h1 className="text-4xl font-black mb-1 uppercase tracking-tight text-[var(--theme-text-primary)]">
+              KatyalStore
+            </h1>
+            <p className="text-xs font-bold mb-6 uppercase tracking-tight text-[var(--theme-text-secondary)]">
+              Enter the store
+            </p>
             
-            <form onSubmit={handleSubmit} className="space-y-5">
+            <form onSubmit={handleSubmit} className="space-y-4">
               <div>
-                <label className="block text-black text-sm font-black mb-2 uppercase">
+                <label className="block text-xs font-black mb-1.5 uppercase tracking-tight text-[var(--theme-text-primary)]">
                   Full Name
                 </label>
                 <input
@@ -97,12 +107,12 @@ export function AuthGatekeeper({ onAuthenticated }: AuthGatekeeperProps) {
                   value={formData.name}
                   onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                   placeholder="Your name"
-                  className="w-full bg-white border-2 border-black px-4 py-3 text-black placeholder-gray-400 focus:outline-none focus:bg-yellow-100 font-medium transition disabled:opacity-60 disabled:bg-gray-100"
+                  className="w-full bg-[var(--theme-surface-elevated)] border-2 border-[var(--theme-border)] px-4 py-2.5 text-[var(--theme-text-primary)] placeholder-[var(--theme-text-secondary)] focus:outline-none focus:bg-yellow-100 focus:text-black font-medium transition disabled:opacity-60 text-sm shadow-[2px_2px_0px_0px_var(--theme-shadow-color)]"
                 />
               </div>
 
               <div>
-                <label className="block text-black text-sm font-black mb-2 uppercase">
+                <label className="block text-xs font-black mb-1.5 uppercase tracking-tight text-[var(--theme-text-primary)]">
                   Email Address
                 </label>
                 <input
@@ -111,7 +121,7 @@ export function AuthGatekeeper({ onAuthenticated }: AuthGatekeeperProps) {
                   value={formData.email}
                   onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                   placeholder="your@email.com"
-                  className="w-full bg-white border-2 border-black px-4 py-3 text-black placeholder-gray-400 focus:outline-none focus:bg-yellow-100 font-medium transition disabled:opacity-60 disabled:bg-gray-100"
+                  className="w-full bg-[var(--theme-surface-elevated)] border-2 border-[var(--theme-border)] px-4 py-2.5 text-[var(--theme-text-primary)] placeholder-[var(--theme-text-secondary)] focus:outline-none focus:bg-yellow-100 focus:text-black font-medium transition disabled:opacity-60 text-sm shadow-[2px_2px_0px_0px_var(--theme-shadow-color)]"
                 />
               </div>
 
@@ -121,7 +131,7 @@ export function AuthGatekeeper({ onAuthenticated }: AuthGatekeeperProps) {
                   animate={{ opacity: 1, y: 0 }}
                   className="space-y-2"
                 >
-                  <label className="block text-black text-sm font-black mb-2 uppercase">
+                  <label className="block text-xs font-black mb-1 uppercase text-[var(--theme-text-primary)]">
                     Verification Code
                   </label>
                   <input
@@ -130,7 +140,7 @@ export function AuthGatekeeper({ onAuthenticated }: AuthGatekeeperProps) {
                     value={code}
                     onChange={(e) => setCode(e.target.value.replace(/\D/g, ''))}
                     placeholder="Enter 6-Digit OTP"
-                    className="w-full bg-white border-2 border-black px-4 py-3 text-black placeholder-gray-400 focus:outline-none focus:bg-yellow-100 font-black text-center tracking-[6px] text-lg transition animate-none"
+                    className="w-full bg-[var(--theme-surface-elevated)] border-2 border-[var(--theme-border)] px-4 py-3 text-[var(--theme-text-primary)] placeholder-[var(--theme-text-secondary)] focus:outline-none focus:bg-yellow-100 focus:text-black font-black text-center tracking-[6px] text-lg transition shadow-[2px_2px_0px_0px_var(--theme-shadow-color)]"
                     autoFocus
                   />
                 </motion.div>
@@ -138,7 +148,7 @@ export function AuthGatekeeper({ onAuthenticated }: AuthGatekeeperProps) {
 
               {error && (
                 <motion.p
-                  className="text-black text-sm font-bold bg-red-300 border-2 border-black p-2"
+                  className="text-black text-xs font-bold bg-red-300 border-2 border-black p-2.5 shadow-[2px_2px_0px_0px_#000000]"
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
                 >
@@ -146,11 +156,11 @@ export function AuthGatekeeper({ onAuthenticated }: AuthGatekeeperProps) {
                 </motion.p>
               )}
 
-              <div className="space-y-2">
+              <div className="space-y-2 pt-2">
                 <button
                   type="submit"
                   disabled={isSubmitting}
-                  className="w-full bg-black text-white font-black py-3 uppercase tracking-tight text-sm border-4 border-black hover:shadow-[6px_6px_0px_0px_#000000] active:shadow-[2px_2px_0px_0px_#000000] transition-shadow disabled:opacity-55 cursor-pointer"
+                  className="w-full bg-yellow-300 text-black font-black py-3 uppercase tracking-tight text-xs border-2 border-black hover:shadow-[4px_4px_0px_0px_#000000] active:shadow-[1px_1px_0px_0px_#000000] transition-all disabled:opacity-55 cursor-pointer shadow-[3px_3px_0px_0px_#000000]"
                 >
                   {codeSent 
                     ? (isSubmitting ? 'Verifying Code...' : 'Verify & Enter Store') 
@@ -165,7 +175,7 @@ export function AuthGatekeeper({ onAuthenticated }: AuthGatekeeperProps) {
                       setCode('');
                       setError('');
                     }}
-                    className="w-full text-center text-xs font-black uppercase text-black hover:underline py-1 cursor-pointer"
+                    className="w-full text-center text-xs font-black uppercase text-[var(--theme-text-primary)] hover:underline py-1 cursor-pointer"
                   >
                     ← Change Email or Restart
                   </button>
@@ -173,7 +183,7 @@ export function AuthGatekeeper({ onAuthenticated }: AuthGatekeeperProps) {
               </div>
             </form>
 
-            <p className="text-black text-xs text-center mt-6 font-bold">
+            <p className="text-[10px] text-[var(--theme-text-secondary)] text-center mt-6 font-black uppercase tracking-wider">
               DISCOVER AMAZING APPS
             </p>
           </motion.div>
